@@ -6,3 +6,8 @@ out
 *.tsbuildinfo
 next-env.d.ts
 .vercel
+
+# Sensitive credentials & DB details
+mysqldb.txt
+detail.txt
+sapabase_connect.txt
