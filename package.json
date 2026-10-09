@@ -4,18 +4,18 @@
   "private": true,
   "description": "e-learning วิชา 31910-2028 การพาณิชย์บนสื่อสังคมออนไลน์ วิทยาลัยอาชีวศึกษาภาวนาโพธิคุณ",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
     "typecheck": "tsc --noEmit",
     "validate-content": "node scripts/validate-content.mjs",
-    "db:seed": "node scripts/seed-mysql.mjs"
+    "check-supabase": "node scripts/check-supabase.mjs",
+    "test:production": "node scripts/test-production.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.7",
     "@supabase/supabase-js": "^2.117.2",
     "lucide-react": "^1.52.0",
-    "mysql2": "^3.24.5",
     "next": "^16.4.0",
     "next-themes": "^0.4.6",
     "papaparse": "^5.5.3",
@@ -33,5 +33,8 @@
     "@types/react-dom": "^19",
     "tailwindcss": "^4.3.3",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": "24.x"
   }
 }

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Navbar } from "@/components/navbar";
-import { getUnitByNumber, COURSE_UNITS } from "@/lib/course-data";
+import { getCourseUnits, getCourseUnit } from "@/lib/course";
+import { requireProfile, navbarUser } from "@/lib/auth";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import {
@@ -25,13 +26,14 @@ export default async function UnitDetailPage({ params, searchParams }: Props) {
   const { number } = await params;
   const { lesson: lessonQuery } = await searchParams;
   const unitNum = parseInt(number, 10);
-  const unit = getUnitByNumber(unitNum);
+  const profile = await requireProfile();
+  const unit = await getCourseUnit(unitNum);
 
-  if (!unit) {
+  if (!unit || !unit.assignment || !unit.lessons.length) {
     notFound();
   }
 
-  const currentLessonIndex = lessonQuery ? Math.max(0, parseInt(lessonQuery, 10) - 1) : 0;
+  const currentLessonIndex = lessonQuery ? Math.min(unit.lessons.length - 1, Math.max(0, (Number(lessonQuery) || 1) - 1)) : 0;
   const currentLesson = unit.lessons[currentLessonIndex] || unit.lessons[0];
 
   const prevUnit = unitNum > 1 ? unitNum - 1 : null;
@@ -39,7 +41,7 @@ export default async function UnitDetailPage({ params, searchParams }: Props) {
 
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
-      <Navbar />
+      <Navbar user={navbarUser(profile)} />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 w-full">
         {/* Navigation Breadcrumb */}
@@ -63,7 +65,7 @@ export default async function UnitDetailPage({ params, searchParams }: Props) {
                   หน่วยการเรียนรู้ที่ {unit.number}
                 </span>
                 <span className="text-xs text-slate-500">
-                  {unit.lessons.length} บทเรียนย่อย · 15 ข้อในคลัง
+                  {unit.lessons.length} บทเรียนย่อย · {unit.questionCount} ข้อในคลัง
                 </span>
               </div>
               <h1 className="font-['Prompt'] text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
@@ -88,7 +90,7 @@ export default async function UnitDetailPage({ params, searchParams }: Props) {
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-orange-50 text-slate-700 dark:text-slate-200 text-xs font-medium"
               >
                 <FileText className="w-3.5 h-3.5 text-blue-500" />
-                <span>ใบงาน ({unit.assignment.max_score} คะแนน)</span>
+                <span>ใบงาน ({unit.assignment?.max_score} คะแนน)</span>
               </Link>
               <Link
                 href={`/quiz/${unit.number}/posttest`}

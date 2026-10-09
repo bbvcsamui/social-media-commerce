@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SaveSimulation } from "@/components/save-simulation";
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import {
@@ -14,6 +15,7 @@ import {
 } from "lucide-react";
 
 export default function PricingSimulationPage() {
+  const [answer, setAnswer] = useState(0);
   // Inputs
   const [productCost, setProductCost] = useState<number>(100);
   const [packagingCost, setPackagingCost] = useState<number>(15);
@@ -50,6 +52,7 @@ export default function PricingSimulationPage() {
       <Navbar />
 
       <main className="flex-1 max-w-5xl mx-auto px-4 sm:px-6 py-8 w-full">
+        <div className="border rounded-xl p-4 mb-4"><label>ราคาที่คำนวณได้ (บาท)<input type="number" min={0} className="border rounded p-2 bg-transparent ml-3" value={answer} onChange={e => setAnswer(Number(e.target.value))} /></label><SaveSimulation key={[productCost,packagingCost,shippingCost,freeShipping,platformFeePercent,marketingPercent,targetMarginPercent,answer].join(":")} data={{ key: "pricing", inputs: { productCost,packagingCost,shippingCost,freeShipping,platformFeePercent,marketingPercent,targetMarginPercent,answer } }} /></div>
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-500 mb-6">
           <Link href="/simulations" className="hover:text-orange-600 flex items-center gap-1">

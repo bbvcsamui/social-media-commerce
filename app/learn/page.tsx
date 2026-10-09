@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
-import { COURSE_UNITS } from "@/lib/course-data";
+import { getCourseUnits, getCourseUnit } from "@/lib/course";
+import { requireProfile, navbarUser } from "@/lib/auth";
 import {
   BookOpen,
   CheckCircle2,
@@ -12,10 +13,12 @@ import {
   HelpCircle,
 } from "lucide-react";
 
-export default function LearnIndexPage() {
+export default async function LearnIndexPage() {
+  const profile = await requireProfile();
+  const COURSE_UNITS = await getCourseUnits();
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
-      <Navbar />
+      <Navbar user={navbarUser(profile)} />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 w-full">
         {/* Header */}
@@ -148,7 +151,7 @@ export default function LearnIndexPage() {
                       href={`/assignment/${unit.number}`}
                       className="hover:text-orange-600 hover:underline"
                     >
-                      ใบงาน ({unit.assignment.max_score} คะแนน)
+                      ใบงาน ({unit.assignment?.max_score} คะแนน)
                     </Link>
                   </div>
                 </div>

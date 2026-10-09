@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { COURSE } from "@/lib/config";
 import { Navbar } from "@/components/navbar";
-import { COURSE_UNITS } from "@/lib/course-data";
+import { getCourseUnits, getCourseUnit } from "@/lib/course";
+import { requireProfile, navbarUser } from "@/lib/auth";
 import {
   BookOpen,
   Sparkles,
@@ -15,7 +16,9 @@ import {
   FileText,
 } from "lucide-react";
 
-export default function HomePage() {
+export const dynamic = "force-dynamic";
+export default async function HomePage() {
+  const COURSE_UNITS = await getCourseUnits();
   return (
     <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950">
       <Navbar />
@@ -161,7 +164,7 @@ export default function HomePage() {
                     {unit.number}
                   </span>
                   <span className="text-xs font-medium text-slate-500">
-                    {unit.lessons.length} บทเรียน · {unit.questions.length} ข้อสอบ
+                    {unit.lessons.length} บทเรียน · {unit.questionCount} ข้อสอบ
                   </span>
                 </div>
 
@@ -175,10 +178,10 @@ export default function HomePage() {
 
                 <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between text-xs text-slate-500">
                   <span className="truncate max-w-[200px]">
-                    {unit.assignment.title}
+                    {unit.assignment?.title}
                   </span>
                   <span className="font-semibold text-orange-600 dark:text-orange-400">
-                    {unit.assignment.max_score} คะแนน
+                    {unit.assignment?.max_score} คะแนน
                   </span>
                 </div>
               </Link>

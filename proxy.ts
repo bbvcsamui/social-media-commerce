@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-const PROTECTED = ["/learn", "/teacher", "/change-password"];
+const PROTECTED = ["/learn", "/teacher", "/change-password", "/quiz", "/exam", "/assignment", "/simulations", "/certificate"];
 
 export async function proxy(request: NextRequest) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -33,6 +33,23 @@ export async function proxy(request: NextRequest) {
     redirect.pathname = "/login";
     redirect.search = "";
     return NextResponse.redirect(redirect);
+  }
+
+  if (user && PROTECTED.some((p) => path === p || path.startsWith(p + "/"))) {
+    const { data: profile } = await supabase.from("profiles")
+      .select("role,must_change_password").eq("id", user.id).single();
+    let destination: string | undefined;
+    if (!profile) destination = "/login";
+    else if (profile.must_change_password && path !== "/change-password") destination = "/change-password";
+    else if ((path === "/teacher" || path.startsWith("/teacher/")) && profile.role !== "teacher") destination = "/learn";
+    if (destination) {
+      const redirect = request.nextUrl.clone();
+      redirect.pathname = destination;
+      redirect.search = "";
+      const result = NextResponse.redirect(redirect);
+      response.cookies.getAll().forEach((cookie) => result.cookies.set(cookie));
+      return result;
+    }
   }
 
   return response;

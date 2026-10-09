@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -18,15 +19,20 @@ import type { Assignment } from "@/lib/course-data";
 
 interface Props {
   unitNumber: number;
-  assignment: Assignment;
+  assignment: Assignment & { id: number };
+  studentId: string;
+  initialSubmission?: { file_name: string | null; link_url: string | null; note: string | null; score: number | null; feedback: string | null } | null;
 }
 
-export function AssignmentClient({ unitNumber, assignment }: Props) {
+export function AssignmentClient({ unitNumber, assignment, studentId, initialSubmission }: Props) {
   const [submissionType, setSubmissionType] = useState<"file" | "link">("file");
   const [fileName, setFileName] = useState("");
   const [linkUrl, setLinkUrl] = useState("");
   const [studentNote, setStudentNote] = useState("");
-  const [submitted, setSubmitted] = useState(false);
+  const [submitted, setSubmitted] = useState(Boolean(initialSubmission));
+  const [file, setFile] = useState<File | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.files && e.target.files[0]) {
@@ -36,25 +42,33 @@ export function AssignmentClient({ unitNumber, assignment }: Props) {
         return;
       }
       setFileName(file.name);
+      setFile(file);
     }
   }
 
-  function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (submissionType === "file" && !fileName) {
-      alert("กรุณาเลือกไฟล์ชิ้นงานที่ต้องการส่ง");
-      return;
-    }
-    if (submissionType === "link" && !linkUrl) {
-      alert("กรุณาระบุ URL ลิงก์ชิ้นงาน");
-      return;
-    }
-    setSubmitted(true);
-    window.scrollTo({ top: 0, behavior: "smooth" });
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault(); setBusy(true); setError("");
+    try {
+      let path: string | null = null;
+      if (submissionType === "file") {
+        if (!file) throw Error("กรุณาเลือกไฟล์งาน (PDF หรือภาพ ขนาดไม่เกิน 10 MB)");
+        if (!["application/pdf", "image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)) throw Error("รองรับไฟล์ PDF และภาพ PNG/JPEG/WebP/GIF");
+        path = studentId + "/" + crypto.randomUUID() + "." + (file.name.split(".").pop() || "bin");
+        const { error: uploadError } = await createClient().storage.from("submissions").upload(path, file, { contentType: file.type });
+        if (uploadError) throw Error("อัปโหลดไฟล์ไม่สำเร็จ กรุณาลองใหม่");
+      }
+      const response = await fetch("/api/submissions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ assignment_id: assignment.id, note: studentNote, file_path: path, file_name: file?.name, link_url: submissionType === "link" ? linkUrl : null }) });
+      const data = await response.json();
+      if (!response.ok) throw Error(data.error);
+      setSubmitted(true); window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (e) { setError(e instanceof Error ? e.message : "ส่งงานไม่สำเร็จ"); }
+    finally { setBusy(false); }
   }
 
   return (
     <div className="max-w-4xl mx-auto py-8 px-4 sm:px-6">
+      {error && <p role="alert" className="text-red-600 mb-4">{error}</p>}
+      {initialSubmission && <p className="mb-4">งานล่าสุด: {initialSubmission.file_name || initialSubmission.link_url} · คะแนน: {initialSubmission.score ?? "รอตรวจ"} {initialSubmission.feedback}</p>}
       {/* Breadcrumb */}
       <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-500 mb-6">
         <Link href={`/learn/unit/${unitNumber}`} className="hover:text-orange-600 flex items-center gap-1">
@@ -248,9 +262,10 @@ export function AssignmentClient({ unitNumber, assignment }: Props) {
 
             <button
               type="submit"
+              disabled={busy}
               className="w-full py-2.5 rounded-xl bg-gradient-to-r from-orange-500 to-purple-600 text-white font-['Prompt'] font-semibold text-xs sm:text-sm shadow-md hover:opacity-95 transition-opacity"
             >
-              {submitted ? "ส่งชิ้นงานซ้ำ (อัปเดต)" : "ยืนยันการส่งชิ้นงาน"}
+              {busy ? "กำลังส่ง..." : submitted ? "ส่งชิ้นงานซ้ำ (รอตรวจใหม่)" : "ยืนยันการส่งชิ้นงาน"}
             </button>
           </form>
         </div>

@@ -79,7 +79,7 @@ create table if not exists public.attempts (
   student_id uuid not null references public.profiles(id) on delete cascade,
   question_ids int[] not null,
   choice_orders jsonb not null,      -- { "<qid>": [2,0,3,1] } display order -> original index
-  answers jsonb not null default '{}'::jsonb, -- { "<qid>": originalIndex }
+  answers jsonb not null default '{}'::jsonb, -- { "<qid>": displayIndex }; server maps through choice_orders
   score int,
   max_score int not null,
   started_at timestamptz not null default now(),

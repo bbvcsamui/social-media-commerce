@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTheme } from "next-themes";
 import { useEffect, useState } from "react";
+import { createClient } from "@/lib/supabase/client";
 import {
   BookOpen,
   GraduationCap,
@@ -19,7 +20,7 @@ import {
 } from "lucide-react";
 
 export function Navbar({
-  user,
+  user: suppliedUser,
 }: {
   user?: { role: "teacher" | "student"; name: string; studentCode?: string } | null;
 }) {
@@ -27,8 +28,21 @@ export function Navbar({
   const { theme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [sessionUser, setSessionUser] = useState<{ role: "teacher" | "student"; name: string; studentCode?: string } | null>(null);
+  const user = suppliedUser === undefined ? sessionUser : suppliedUser;
 
   useEffect(() => setMounted(true), []);
+  useEffect(() => {
+    if (suppliedUser !== undefined) return;
+    let cancelled = false;
+    const client = createClient();
+    void client.auth.getUser().then(async ({ data: { user } }) => {
+      if (!user) return;
+      const { data } = await client.from("profiles").select("role,full_name,student_code").eq("id", user.id).single();
+      if (data && !cancelled) setSessionUser({ role: data.role, name: data.full_name, studentCode: data.student_code });
+    }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [suppliedUser]);
 
   const navLinks = [
     { href: "/learn", label: "บทเรียน 9 หน่วย", icon: BookOpen },

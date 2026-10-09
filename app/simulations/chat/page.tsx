@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { SaveSimulation } from "@/components/save-simulation";
 import Link from "next/link";
 import { Navbar } from "@/components/navbar";
 import {
@@ -153,6 +154,7 @@ export default function ChatSimulationPage() {
       <Navbar />
 
       <main className="flex-1 max-w-3xl mx-auto px-4 sm:px-6 py-8 w-full">
+        {isFinished && <SaveSimulation data={{ key: "chat", answers: history }} />}
         {/* Breadcrumb */}
         <div className="flex items-center gap-2 text-xs sm:text-sm text-slate-500 mb-6">
           <Link href="/simulations" className="hover:text-orange-600 flex items-center gap-1">

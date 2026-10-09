@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { COURSE } from "@/lib/config";
+import { COURSE, loginToEmail } from "@/lib/config";
+import { createClient } from "@/lib/supabase/client";
 import {
   GraduationCap,
   Lock,
@@ -19,21 +20,36 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"student" | "teacher">("student");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
 
-    // In preview / standalone mode:
-    // If teacher: redirect to /teacher
-    // If student: redirect to /learn
-    setTimeout(() => {
-      if (role === "teacher") {
-        router.push("/teacher");
-      } else {
-        router.push("/learn");
+    setError("");
+    try {
+      const supabase = createClient();
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email: loginToEmail(studentCode), password,
+      });
+      if (signInError || !data.user) {
+        setError("ข้อมูลเข้าสู่ระบบไม่ถูกต้อง หรือบัญชียังไม่พร้อมใช้งาน");
+        return;
       }
-    }, 500);
+      const { data: profile, error: profileError } = await supabase.from("profiles")
+        .select("role,must_change_password").eq("id", data.user.id).single();
+      if (profileError || !profile || profile.role !== role) {
+        await supabase.auth.signOut();
+        setError("ไม่พบข้อมูลผู้ใช้ หรือประเภทบัญชีไม่ตรงกับที่เลือก");
+        return;
+      }
+      router.push(profile.must_change_password ? "/change-password" : profile.role === "teacher" ? "/teacher" : "/learn");
+      router.refresh();
+    } catch {
+      setError("ไม่สามารถเชื่อมต่อระบบได้ กรุณาลองใหม่");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -79,7 +95,7 @@ export default function LoginPage() {
               type="button"
               onClick={() => {
                 setRole("teacher");
-                setStudentCode("teacher@bvc.ac.th");
+                setStudentCode("");
               }}
               className={`flex-1 py-2.5 rounded-lg transition-all ${
                 role === "teacher"
@@ -92,6 +108,7 @@ export default function LoginPage() {
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
+            {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
             <div>
               <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5">
                 {role === "student" ? "รหัสประจำตัวนักศึกษา" : "อีเมลอาจารย์ผู้สอน"}

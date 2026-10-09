@@ -6,8 +6,11 @@ out
 *.tsbuildinfo
 next-env.d.ts
 .vercel
+.local/
 
 # Sensitive credentials & DB details
 mysqldb.txt
 detail.txt
 sapabase_connect.txt
+students.csv
+student-credentials*.csv

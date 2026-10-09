@@ -1,0 +1,71 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import nextEnv from '@next/env';
+import { createClient } from '@supabase/supabase-js';
+import { createServerClient } from '@supabase/ssr';
+import Papa from 'papaparse';
+import { parseStudents } from '../lib/students.ts';
+
+nextEnv.loadEnvConfig(process.cwd());
+assert.equal(parseStudents('\uFEFFstudent_code,full_name\r\n0012345,"ชื่อ, นามสกุล"').errors.length, 0);
+assert.ok(parseStudents('student_code,full_name\n12345,A\n12345,B').errors.length);
+assert.ok(parseStudents('student_code,full_name\n1,A').errors.length);
+assert.ok(parseStudents('code,name\n12345,A').errors.length);
+console.log('CSV validation: passed (BOM, quoted comma, leading zero, duplicates, invalid headers/code)');
+
+const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const admin = createClient(url, process.env.SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+const { data: teacher, error: profileError } = await admin.from('profiles').select('id,must_change_password').eq('role', 'teacher').limit(1).single();
+if (profileError || teacher.must_change_password) throw Error('Teacher must complete first password change before test');
+const { data: account } = await admin.auth.admin.getUserById(teacher.id);
+const { data: link, error: linkError } = await admin.auth.admin.generateLink({ type: 'magiclink', email: account.user.email });
+if (linkError) throw Error('Cannot create test teacher session');
+const jar = new Map();
+const client = createServerClient(url, anon, { cookies: { getAll: () => [...jar].map(([name,value]) => ({name,value})), setAll: values => values.forEach(({name,value}) => jar.set(name,value)) } });
+const { error: authError } = await client.auth.verifyOtp({ token_hash: link.properties.hashed_token, type: 'magiclink' });
+if (authError) throw Error('Test teacher authentication failed');
+const endpoint = 'http://localhost:3000/api/teacher/students';
+const headers = { Cookie: [...jar].map(([k,v]) => `${k}=${v}`).join('; '), Origin: 'http://localhost:3000', 'Content-Type': 'application/json' };
+const unauthorized = await fetch(endpoint);
+assert.equal(unauthorized.status, 403);
+const wrongOrigin = await fetch(endpoint, { method: 'POST', headers: { ...headers, Origin: 'https://example.com' }, body: '{}' });
+assert.equal(wrongOrigin.status, 403);
+const malformed = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ csv: 'wrong,headers\n1,A' }) });
+assert.equal(malformed.status, 400);
+console.log('API access and CSV rejection: passed');
+const csv = fs.readFileSync('students.csv', 'utf8');
+const expected = parseStudents(csv);
+assert.equal(expected.errors.length, 0);
+const response = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ csv }) });
+assert.equal(response.status, 200);
+const { results } = await response.json();
+assert.equal(results.filter(r => r.status === 'failed').length, 0, 'Import contains failed rows');
+const created = results.filter(r => r.status === 'created');
+if (created.length) {
+  fs.mkdirSync('.local', { recursive: true });
+  fs.writeFileSync('.local/student-credentials.csv', '\uFEFF' + Papa.unparse(created.map(({ student_code, full_name, password }) => ({ student_code, full_name, password }))));
+}
+const repeat = await fetch(endpoint, { method: 'POST', headers, body: JSON.stringify({ csv }) });
+const repeatData = await repeat.json();
+assert.ok(repeatData.results.every(r => r.status === 'skipped'));
+const listing = await fetch(endpoint, { headers });
+const listingData = await listing.json();
+for (const s of expected.students) assert.ok(listingData.students.some(p => p.student_code === s.student_code && p.full_name === s.full_name));
+const first = listingData.students.find(p => p.student_code === expected.students[0].student_code);
+const edited = await fetch(endpoint, { method: 'PATCH', headers, body: JSON.stringify({ id: first.id, full_name: first.full_name }) });
+assert.equal(edited.status, 200);
+const protectTeacher = await fetch(endpoint, { method: 'DELETE', headers, body: JSON.stringify({ id: teacher.id, student_code: first.student_code }) });
+assert.equal(protectTeacher.status, 404);
+console.log('Name editing and teacher-account deletion protection: passed');
+if (created.length) {
+  const student = createClient(url, anon, { auth: { persistSession: false } });
+  const { data, error } = await student.auth.signInWithPassword({ email: `${created[0].student_code}@student.local`, password: created[0].password });
+  assert.equal(error, null);
+  const { data: profile } = await student.from('profiles').select('role,must_change_password').eq('id', data.user.id).single();
+  assert.equal(profile.role, 'student'); assert.equal(profile.must_change_password, true);
+  await student.auth.signOut({ scope: 'local' });
+  console.log('Student sign-in and first-password flag: passed');
+}
+console.log(`Imported ${expected.students.length} students; created=${created.length}; repeated import skipped all; database listing verified.`);
+await client.auth.signOut({ scope: 'local' });
