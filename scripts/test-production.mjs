@@ -34,7 +34,9 @@ async function account() {
 async function api(path, headers, method = 'GET', body, expected = 200) {
   const response = await fetch(base + path, { method, headers, ...(body === undefined ? {} : { body: JSON.stringify(body) }), redirect: 'manual' });
   const text = await response.text();
-  assert.equal(response.status, expected, `${method} ${path}: unexpected status ${response.status}`);
+  let publicError;
+  try { const failure = JSON.parse(text); publicError = `${failure.error || ''} ${failure.code || ''}`; } catch { publicError = 'non-JSON response'; }
+  assert.equal(response.status, expected, `${method} ${path}: unexpected status ${response.status}; ${publicError || ''}`);
   return text ? JSON.parse(text) : null;
 }
 async function correctAnswers(attempt) {
@@ -47,6 +49,8 @@ try {
   const { data: teacher } = await admin.from('profiles').select('id').eq('role','teacher').limit(1).single();
   const { data: teacherUser } = await admin.auth.admin.getUserById(teacher.id);
   const teacherHeaders = await signIn(teacherUser.user.email,null,true);
+  const health = await api('/api/teacher/health',teacherHeaders);
+  console.log('Configuration check:',JSON.stringify(health));
   const { data: assessments } = await admin.from('assessments').select('*');
   const { data: units } = await admin.from('units').select('id,number');
   const unit1=units.find(u=>u.number===1);

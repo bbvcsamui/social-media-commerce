@@ -9,5 +9,5 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     const id = Number((await params).id);
     if (!Number.isInteger(id) || id < 1) throw new AssessmentError("ไม่พบแบบทดสอบ", 404);
     return NextResponse.json(await startAttempt(profile.id, id), { headers: { "Cache-Control": "no-store" } });
-  } catch (e) { return NextResponse.json({ error: e instanceof AssessmentError ? e.message : "เริ่มสอบไม่สำเร็จ" }, { status: e instanceof AssessmentError ? e.status : 500 }); }
+  } catch (e) { return NextResponse.json({ error: e instanceof AssessmentError ? e.message : "เริ่มสอบไม่สำเร็จ", code: e instanceof AssessmentError ? e.code : e instanceof Error ? e.name : "UNKNOWN" }, { status: e instanceof AssessmentError ? e.status : 500 }); }
 }

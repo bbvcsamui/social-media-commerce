@@ -2,7 +2,7 @@ import "server-only";
 import { createHash, randomInt } from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-export class AssessmentError extends Error { constructor(message: string, public status = 400) { super(message); } }
+export class AssessmentError extends Error { constructor(message: string, public status = 400, public code = "ASSESSMENT_ERROR") { super(message); } }
 export function shuffle<T>(items: T[]) {
   const output = [...items];
   for (let i = output.length - 1; i > 0; i--) { const j = randomInt(i + 1); [output[i], output[j]] = [output[j], output[i]]; }
@@ -63,7 +63,7 @@ export async function startAttempt(studentId: string, assessmentId: number) {
     expires_at: assessment.time_limit_minutes ? new Date(now.getTime() + assessment.time_limit_minutes * 60000).toISOString() : null,
   });
   // The deterministic slot primary key makes concurrent starts share one attempt.
-  if (insertError && insertError.code !== "23505") throw new AssessmentError("เริ่มสอบไม่สำเร็จ", 500);
+  if (insertError && insertError.code !== "23505") throw new AssessmentError("เริ่มสอบไม่สำเร็จ", 500, `ATTEMPT_INSERT_${insertError.code || "UNKNOWN"}`);
   return publicAttempt(id, studentId);
 }
 export async function publicAttempt(id: string, studentId: string) {
