@@ -1,7 +1,7 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 export async function gradebook() {
-  const admin = createAdminClient();
+  const admin = await createClient();
   const [profiles, attempts, assessments, assignments, submissions, simulations, affective] = await Promise.all([
     admin.from("profiles").select("id,student_code,full_name").eq("role", "student").order("student_code"),
     admin.from("attempts").select("student_id,assessment_id,score,max_score,submitted_at").not("submitted_at", "is", null),

@@ -1,9 +1,10 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Assignment } from "@/lib/course-data";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
-export async function getCourseUnits() {
-  const admin = createAdminClient();
+export async function getCourseUnits(client?: SupabaseClient) {
+  const admin = client || createAdminClient();
   const [u, l, a, q] = await Promise.all([
     admin.from("units").select("id,number,title,description,objectives").eq("published", true).order("number"),
     admin.from("lessons").select("unit_id,title,content_md,position").order("position"),

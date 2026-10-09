@@ -16,7 +16,7 @@ const forbidden = () => NextResponse.json({ error: "เฉพาะอาจา�
 
 export async function GET(request: Request) {
   if (!await authorize(request)) return forbidden();
-  const { data, error } = await createAdminClient().from("profiles").select("id,student_code,full_name,must_change_password,created_at").eq("role", "student").order("student_code").limit(10000);
+  const { data, error } = await (await createClient()).from("profiles").select("id,student_code,full_name,must_change_password,created_at").eq("role", "student").order("student_code").limit(10000);
   if (error) return NextResponse.json({ error: "โหลดรายชื่อไม่สำเร็จ" }, { status: 500 });
   return NextResponse.json({ students: data }, { headers: { "Cache-Control": "no-store" } });
 }

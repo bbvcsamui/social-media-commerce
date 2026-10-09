@@ -26,6 +26,7 @@ Next.js application for BBVC. Supabase is the database, Auth provider and privat
 ## Operation
 
 - Teachers add/import students with `student_code,full_name` CSV headers. Download generated passwords immediately and distribute individually. Repeat imports skip existing codes.
+- The student management section has a roster/status CSV export and individual or whole-class random password reset. Reset requires typing `ตั้งรหัสใหม่`; old passwords stop working, and first-login password change is required again. Grades and submissions are preserved. Existing passwords cannot be viewed because Supabase stores password hashes; newly issued credentials are downloadable only during the current page session.
 - Students change the temporary password before accessing protected pages.
 - Published lessons and assessments come from Supabase. Starting an assessment creates or resumes an attempt; merely opening its page does not consume an attempt.
 - Questions and choices are shuffled on the server; answer keys are never sent to the quiz client. Scoring and attempt/time limits are enforced on the server. Grades persist to `attempts`.

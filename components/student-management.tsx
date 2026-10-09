@@ -25,6 +25,8 @@ export function StudentManagement() {
   const [editing, setEditing] = useState<Student | null>(null);
   const [deleting, setDeleting] = useState<Student | null>(null);
   const [confirmCode, setConfirmCode] = useState("");
+  const [resetCodes, setResetCodes] = useState<string[]>([]);
+  const [resetConfirmation, setResetConfirmation] = useState("");
 
   async function load() {
     setLoading(true);
@@ -65,7 +67,7 @@ export function StudentManagement() {
         setMessage(`กำลังนำเข้า ${index + 1}–${Math.min(index + 25, parsed.data.length)} จาก ${parsed.data.length} คน`);
         const data = await write("POST", { csv: Papa.unparse(parsed.data.slice(index, index+25)) });
         all.push(...data.results);
-        setResults(previous => [...previous.filter(r => r.status === "created"), ...data.results]);
+        setResults(previous => [...previous.filter(r => r.password && !data.results.some((next: Result) => next.password && next.student_code === r.student_code)), ...data.results]);
       }
       const created = all.filter(r => r.status === "created").length;
       const skipped = all.filter(r => r.status === "skipped").length;
@@ -104,9 +106,33 @@ export function StudentManagement() {
     catch (e) { setMessage(e instanceof Error ? e.message : "ลบไม่สำเร็จ"); }
     finally { setBusy(false); }
   }
+  async function resetPasswords() {
+    if (resetConfirmation !== "ตั้งรหัสใหม่") return;
+    setBusy(true); setMessage("");
+    const collected: Result[] = [];
+    try {
+      for (let index=0; index<resetCodes.length; index+=25) {
+        const response = await fetch(endpoint + "/passwords", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ student_codes: resetCodes.slice(index,index+25), confirmation: resetConfirmation }) });
+        const data = await response.json();
+        if (!response.ok) throw Error(data.error || "ตั้งรหัสใหม่ไม่สำเร็จ");
+        collected.push(...data.results);
+        setResults(previous => [...previous.filter(r => r.password && !data.results.some((next: Result) => next.password && next.student_code === r.student_code)), ...data.results]);
+      }
+      const successful = collected.filter(r=>r.password);
+      if (successful.length) download("student-credentials.csv", successful.map(r=>({student_code:r.student_code,full_name:r.full_name,password:r.password!})));
+      setMessage(`ตั้งรหัสใหม่สำเร็จ ${successful.length} คน · ไม่สำเร็จ ${collected.filter(r=>r.status==="failed").length} คน โปรดเก็บไฟล์รหัสผ่านที่ดาวน์โหลดไว้`);
+      setResetCodes([]); setResetConfirmation(""); await load(); router.refresh();
+    } catch(e) { setMessage(e instanceof Error ? e.message : "ตั้งรหัสใหม่ไม่สำเร็จ"); }
+    finally { setBusy(false); }
+  }
   return <section className="p-6 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 space-y-5 mb-8">
     <h2 className="text-xl font-bold">จัดการรายชื่อนักศึกษา</h2>
     <p className="text-sm text-slate-500">สร้างบัญชีจากรหัสนักศึกษา พร้อมรหัสผ่านสุ่มรายบุคคล นักศึกษาต้องเปลี่ยนรหัสผ่านเมื่อเข้าสู่ระบบครั้งแรก</p>
+    <div className="flex flex-wrap gap-3">
+      <button className="underline" disabled={loading||!students.length} onClick={()=>download("student-list.csv",students.map(s=>({student_code:s.student_code,full_name:s.full_name,status:s.must_change_password?"รอเปลี่ยนรหัสผ่าน":"พร้อมใช้งาน"})))}>ดาวน์โหลดรายชื่อและสถานะบัญชี</button>
+      <button className={buttonClass} disabled={busy||loading||!students.length} onClick={()=>{setResetCodes(students.map(s=>s.student_code));setResetConfirmation("");}}>สร้างรหัสผ่านสุ่มใหม่ทุกคนและดาวน์โหลด</button>
+    </div>
+    <p className="text-sm text-slate-500">ระบบเก็บรหัสผ่านแบบเข้ารหัส จึงดูรหัสผ่านเดิมไม่ได้ หากทำไฟล์รหัสผ่านหาย ให้ตั้งรหัสใหม่และดาวน์โหลด โดยข้อมูลคะแนนและงานยังคงอยู่</p>
     {message && <p role="status" className="whitespace-pre-line p-3 bg-orange-50 dark:bg-orange-950 rounded">{message}</p>}
     <form onSubmit={e => { e.preventDefault(); void importCsv(Papa.unparse([{ student_code: code, full_name: name }])); }} className="flex flex-wrap gap-3 items-end">
       <label>รหัสนักศึกษา<input className={inputClass} required pattern="[0-9]{5,20}" value={code} onChange={e => setCode(e.target.value)} /></label>
@@ -123,15 +149,16 @@ export function StudentManagement() {
       <button className={buttonClass} disabled={busy} onClick={() => void importCsv(csv)}>{busy ? "กำลังนำเข้า..." : "ยืนยันนำเข้ารายชื่อ"}</button>
     </div>}
     {results.length > 0 && <div className="space-y-2">
-      {results.some(r => r.status === "created") && <><p>ดาวน์โหลดรหัสผ่านเริ่มต้นเพื่อส่งให้นักศึกษาแต่ละคน ข้อมูลนี้จะแสดงเฉพาะครั้งนี้</p><button className={buttonClass} onClick={() => download("student-credentials.csv", results.filter(r => r.status === "created").map(r => ({ student_code: r.student_code, full_name: r.full_name, password: r.password! })))}>ดาวน์โหลดบัญชีและรหัสผ่านเริ่มต้น</button></>}
+      {results.some(r => r.password) && <><p>ดาวน์โหลดรหัสผ่านเริ่มต้นเพื่อส่งให้นักศึกษาแต่ละคน ข้อมูลนี้จะแสดงเฉพาะครั้งนี้</p><button className={buttonClass} onClick={() => download("student-credentials.csv", results.filter(r => r.password).map(r => ({ student_code: r.student_code, full_name: r.full_name, password: r.password! })))}>ดาวน์โหลดบัญชีและรหัสผ่านเริ่มต้น</button></>}
       {results.filter(r => r.status === "failed").map(r => <p key={r.student_code} className="text-red-600">{r.student_code}: {r.error}</p>)}
     </div>}
     <div className="flex gap-3 items-center"><input aria-label="ค้นหารายชื่อนักศึกษา" className={inputClass} placeholder="ค้นหารหัสหรือชื่อ..." value={search} onChange={e => setSearch(e.target.value)} /><button disabled={busy} onClick={() => void load()}>รีเฟรช</button></div>
     <p>นักศึกษาในระบบ {students.length} คน</p>
     {loading ? <p>กำลังโหลดรายชื่อ...</p> : <div className="overflow-x-auto"><table className="w-full text-sm text-left"><thead><tr><th className="p-2">รหัสนักศึกษา</th><th>ชื่อ-นามสกุล</th><th>สถานะรหัสผ่าน</th><th>จัดการ</th></tr></thead><tbody>
-      {students.filter(s => s.student_code.includes(search) || s.full_name.includes(search)).map(s => <tr key={s.id} className="border-t"><td className="p-2">{s.student_code}</td><td>{s.full_name}</td><td>{s.must_change_password ? "รอเปลี่ยนรหัสผ่านครั้งแรก" : "พร้อมใช้งาน"}</td><td className="space-x-3"><button disabled={busy} onClick={() => setEditing({ ...s })}>แก้ไขชื่อ</button><button disabled={busy} className="text-red-600" onClick={() => { setDeleting(s); setConfirmCode(""); }}>ลบบัญชี</button></td></tr>)}
+      {students.filter(s => s.student_code.includes(search) || s.full_name.includes(search)).map(s => <tr key={s.id} className="border-t"><td className="p-2">{s.student_code}</td><td>{s.full_name}</td><td>{s.must_change_password ? "รอเปลี่ยนรหัสผ่านครั้งแรก" : "พร้อมใช้งาน"}</td><td className="space-x-3"><button disabled={busy} onClick={() => setEditing({ ...s })}>แก้ไขชื่อ</button><button disabled={busy} onClick={()=>{setResetCodes([s.student_code]);setResetConfirmation("");}}>ตั้งรหัสใหม่</button><button disabled={busy} className="text-red-600" onClick={() => { setDeleting(s); setConfirmCode(""); }}>ลบบัญชี</button></td></tr>)}
     </tbody></table>{!students.length && <p className="p-3">ยังไม่มีนักศึกษา กรุณาเพิ่มหรือนำเข้า CSV</p>}</div>}
     {editing && <form onSubmit={saveEdit} className="border rounded p-4 space-y-3"><p>แก้ไขชื่อ {editing.student_code}</p><input aria-label="ชื่อใหม่" className={inputClass} required maxLength={200} value={editing.full_name} onChange={e => setEditing({ ...editing, full_name: e.target.value })} /><button disabled={busy} className={buttonClass}>บันทึก</button><button type="button" disabled={busy} onClick={() => setEditing(null)} className="ml-3">ยกเลิก</button></form>}
     {deleting && <div className="border border-red-300 rounded p-4 space-y-3"><p>ลบบัญชี {deleting.full_name} พร้อมคะแนนและงานที่บันทึกไว้ การลบกู้คืนไม่ได้</p><label>พิมพ์รหัส {deleting.student_code} เพื่อยืนยัน<input className={inputClass} value={confirmCode} onChange={e => setConfirmCode(e.target.value)} /></label><button className={buttonClass} disabled={busy || confirmCode !== deleting.student_code} onClick={() => void remove()}>ยืนยันลบบัญชี</button><button disabled={busy} onClick={() => setDeleting(null)} className="ml-3">ยกเลิก</button></div>}
+    {resetCodes.length>0&&<div className="border border-orange-300 rounded p-4 space-y-3"><h3 className="font-bold">ตั้งรหัสผ่านสุ่มใหม่ {resetCodes.length} คน</h3><p>รหัสผ่านเดิมจะใช้ไม่ได้ และนักศึกษาต้องเปลี่ยนรหัสผ่านก่อนเข้าเรียนครั้งถัดไป คะแนนและงานเดิมยังอยู่</p><label>พิมพ์ “ตั้งรหัสใหม่” เพื่อยืนยัน<input className={inputClass} value={resetConfirmation} onChange={e=>setResetConfirmation(e.target.value)}/></label><button className={buttonClass} disabled={busy||resetConfirmation!=="ตั้งรหัสใหม่"} onClick={()=>void resetPasswords()}>ยืนยันและดาวน์โหลดรหัสผ่าน</button><button disabled={busy} className="ml-3" onClick={()=>setResetCodes([])}>ยกเลิก</button></div>}
   </section>;
 }
